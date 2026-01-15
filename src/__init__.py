@@ -1,0 +1,1 @@
+"""PaperMind application package."""
