@@ -108,19 +108,18 @@ class QAEngine:
 
         prompt = f"""You are an expert research assistant. Answer the following question based ONLY on the provided academic papers.
 
-CRITICAL RULES:
-1. Cite every claim with [Source: Citation]
-2. Use multiple papers to provide comprehensive answers
-3. Compare findings across papers when relevant
-4. If papers contradict, mention both viewpoints
-5. Be specific about which paper says what
+STYLE REQUIREMENTS:
+1. Write a natural, ChatGPT-style response (no "According to Paper X" or bracketed citations).
+2. Summarize the consensus first, then add key nuances or differing views if present.
+3. Keep the tone clear and direct; avoid meta commentary about the sources.
+4. If evidence is limited or conflicting, say so briefly.
 
 Context from Academic Papers:
 {context}
 
 Question: {question}
 
-Provide a detailed, well-cited answer:"""
+Provide a concise, well-structured answer:"""
 
         try:
             response = self.llm.invoke(prompt)
