@@ -1,4 +1,4 @@
-## PaperMind: Research-Grade Academic Q&A Engine
+## PaperMind: Academic Q&A Engine
 
 PaperMind is an academic question-answering and exploration system that combines **multi-source literature retrieval**, a **vector-based knowledge base**, and **LLM synthesis**. The user interacts through a **Streamlit** UI, while the backend orchestrates calls to arXiv, Semantic Scholar, CrossRef, and OpenAlex, incrementally building a persistent scholarly knowledge base.
 
