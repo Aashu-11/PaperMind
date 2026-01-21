@@ -20,41 +20,41 @@ PaperMind is an academic question-answering and exploration system that combines
 
 ## Architecture Diagram
 
-The following diagram reflects the current code-level architecture of this repository (with citation graph features removed):
+The following diagram reflects the current code-level architecture of this repository:
 
 ```mermaid
 flowchart LR
-    subgraph UI["Streamlit UI (app.py)"]
-        A[User\nQuestions & Searches]
-        CH[Chat History (session_state)]
-        T1[Tab: Q&A Chat]
-        T2[Tab: Direct Search]
+    subgraph UI["Streamlit UI"]
+        A["User<br/>Questions & Searches"]
+        CH["Chat History<br/>session_state"]
+        T1["Tab: Q&A Chat"]
+        T2["Tab: Direct Search"]
     end
 
     subgraph Core["Backend Orchestration"]
-        CFG[Config\nsrc/config.py]
-        ASE[AcademicSearchEngine\nsrc/academic_search.py]
-        KB[KnowledgeBase\nChromaDB\nsrc/knowledge_base.py]
-        QA[QAEngine\nRAG + LLMs\nsrc/qa_engine.py]
+        CFG["Config<br/>src/config.py"]
+        ASE["AcademicSearchEngine<br/>src/academic_search.py"]
+        KB["KnowledgeBase<br/>ChromaDB<br/>src/knowledge_base.py"]
+        QA["QAEngine<br/>RAG + LLMs<br/>src/qa_engine.py"]
     end
 
     subgraph LLMs["LLM Providers"]
-        L1[Groq\n(llama-3.1-8b-instant)]
-        L2[OpenAI\n(gpt-4o)]
-        L3[Anthropic\n(claude-3.5-sonnet-20241022)]
-        L4[Google\n(gemini-pro)]
+        L1["Groq<br/>llama-3.1-8b-instant"]
+        L2["OpenAI<br/>gpt-4o"]
+        L3["Anthropic<br/>claude-3.5-sonnet"]
+        L4["Google<br/>gemini-pro"]
     end
 
     subgraph Retrieval["External Academic APIs"]
-        R1[arXiv]
-        R2[Semantic Scholar]
-        R3[CrossRef]
-        R4[OpenAlex]
+        R1["arXiv"]
+        R2["Semantic Scholar"]
+        R3["CrossRef"]
+        R4["OpenAlex"]
     end
 
     subgraph Storage["Persistent Storage"]
-        S1[ChromaDB\nVector Store\nsrc/knowledge_base/]
-        FS[Local FS\ncache/, .env]
+        S1["ChromaDB<br/>Vector Store"]
+        FS["Local FS<br/>cache & env"]
     end
 
     %% UI interactions
@@ -64,31 +64,32 @@ flowchart LR
     T2 -->|query| ASE
 
     %% Config wiring
-    UI --> CFG
+    A --> CFG
     CFG --> ASE
     CFG --> KB
     CFG --> QA
 
     %% Retrieval flows
-    ASE -->|search_all()| R1
-    ASE -->|search_all()| R2
-    ASE -->|search_all()| R3
-    ASE -->|search_all()| R4
+    ASE --> R1
+    ASE --> R2
+    ASE --> R3
+    ASE --> R4
 
     %% Knowledge base flows
-    QA -->|kb.search()| KB
-    ASE -->|results| KB
-    KB -->|embeddings & vectors| S1
+    QA --> KB
+    ASE --> KB
+    KB --> S1
 
     %% LLM flows
-    QA -->|invoke()| L1
-    QA -->|invoke()| L2
-    QA -->|invoke()| L3
-    QA -->|invoke()| L4
+    QA --> L1
+    QA --> L2
+    QA --> L3
+    QA --> L4
 
     %% Outputs
-    QA -->|answer + sources| T1
-    ASE -->|flat results| T2
+    QA --> T1
+    ASE --> T2
+
 ```
 
 ---
