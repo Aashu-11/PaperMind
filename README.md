@@ -1,6 +1,6 @@
 ## PaperMind: Research-Grade Academic Q&A Engine
 
-PaperMind is an academic question-answering and exploration system that combines **multi-source literature retrieval**, a **vector-based knowledge base**, **LLM synthesis**, and an optional **Neo4j citation graph**. The user interacts through a **Streamlit** UI, while the backend orchestrates calls to arXiv, Semantic Scholar, CrossRef, and OpenAlex, incrementally building a persistent scholarly knowledge graph.
+PaperMind is an academic question-answering and exploration system that combines **multi-source literature retrieval**, a **vector-based knowledge base**, and **LLM synthesis**. The user interacts through a **Streamlit** UI, while the backend orchestrates calls to arXiv, Semantic Scholar, CrossRef, and OpenAlex, incrementally building a persistent scholarly knowledge base.
 
 ---
 
@@ -10,19 +10,17 @@ PaperMind is an academic question-answering and exploration system that combines
 - **Frontend**: Streamlit app (`app.py`) offering:
   - Chat-style Q&A interface.
   - Direct database search (raw results).
-  - Interactive citation graph visualization (D3.js, backed by Neo4j).
 - **Backend Services**:
   - `AcademicSearchEngine` (`src/academic_search.py`) for unified multi-API retrieval.
   - `KnowledgeBase` (`src/knowledge_base.py`) for persistent semantic search using ChromaDB + ONNX embeddings.
   - `QAEngine` (`src/qa_engine.py`) for retrieval-augmented generation (RAG) over multiple LLM providers.
-  - `Neo4jClient` (`src/neo4j_client.py`) for storing and querying citation graphs.
 - **Configuration**: `Config` (`src/config.py`) reads `.env` and centralizes paths, API keys, and model configuration.
 
 ---
 
 ## Architecture Diagram
 
-The following diagram reflects the actual code-level architecture of this repository:
+The following diagram reflects the current code-level architecture of this repository (with citation graph features removed):
 
 ```mermaid
 flowchart LR
@@ -31,7 +29,6 @@ flowchart LR
         CH[Chat History (session_state)]
         T1[Tab: Q&A Chat]
         T2[Tab: Direct Search]
-        T3[Tab: Citations Graph]
     end
 
     subgraph Core["Backend Orchestration"]
@@ -39,7 +36,6 @@ flowchart LR
         ASE[AcademicSearchEngine\nsrc/academic_search.py]
         KB[KnowledgeBase\nChromaDB\nsrc/knowledge_base.py]
         QA[QAEngine\nRAG + LLMs\nsrc/qa_engine.py]
-        NEO[Neo4jClient\nCitation Graph\nsrc/neo4j_client.py]
     end
 
     subgraph LLMs["LLM Providers"]
@@ -58,7 +54,6 @@ flowchart LR
 
     subgraph Storage["Persistent Storage"]
         S1[ChromaDB\nVector Store\nsrc/knowledge_base/]
-        S2[Neo4j DB\nCitation Graph]
         FS[Local FS\ncache/, .env]
     end
 
@@ -73,7 +68,6 @@ flowchart LR
     CFG --> ASE
     CFG --> KB
     CFG --> QA
-    CFG --> NEO
 
     %% Retrieval flows
     ASE -->|search_all()| R1
@@ -92,18 +86,10 @@ flowchart LR
     QA -->|invoke()| L3
     QA -->|invoke()| L4
 
-    %% Neo4j graph flows
-    QA -->|sources| NEO
-    ASE -->|flat_results| NEO
-    NEO -->|Query & Paper nodes| S2
-    T3 -->|fetch_query_graph()| NEO
-
     %% Outputs
     QA -->|answer + sources| T1
     ASE -->|flat results| T2
 ```
-
-This diagram is consistent with the actual module boundaries and method calls in the codebase.
 
 ---
 
@@ -121,7 +107,6 @@ This diagram is consistent with the actual module boundaries and method calls in
   - Centralizes API keys:
     - `GROQ_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`.
     - `SEMANTIC_SCHOLAR_API_KEY`, `CROSSREF_EMAIL`.
-    - `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`.
   - Encodes model and provider-level configuration:
     - `DEFAULT_MODEL` (e.g., `"groq"`).
     - `MODELS` mapping provider → underlying model name, temperature, and max tokens.
@@ -144,10 +129,9 @@ The `Streamlit` app (`app.py`) is responsible for session management, user inter
   - Instantiates:
     - `AcademicSearchEngine(config)`.
     - `KnowledgeBase(str(config.CHROMA_DIR))`.
-    - Optional `Neo4jClient` if all `NEO4J_*` variables are present.
     - `QAEngine(config, kb, search_engine)` using the currently selected `DEFAULT_MODEL`.
   - Maintains:
-    - `chat_history`, `last_graph_query_id`, `last_graph_sources`, `last_graph_query`.
+    - `chat_history`.
 
 - **API key validation (`validate_api_keys`)**:
   - Checks for at least one configured LLM provider key.
@@ -169,7 +153,6 @@ The `Streamlit` app (`app.py`) is responsible for session management, user inter
   - On new question:
     - Calls `QAEngine.answer(prompt, use_kb=True, search_new=True)`.
     - Persists the result in chat history.
-    - Triggers `record_graph()` to write Neo4j graph for the current query.
   - Presents:
     - Answer text.
     - An expandable section with up to 10 supporting source cards.
@@ -181,12 +164,6 @@ The `Streamlit` app (`app.py`) is responsible for session management, user inter
     - Result count.
     - Abstracts and metadata per paper.
     - One-click ingestion of all results into `KnowledgeBase`.
-  - Also writes citation graph via `record_graph()`, reusing the same Neo4j schema.
-
-- **Citation Graph (`render_citation_graph`)**:
-  - Retrieves the last query’s graph from Neo4j by `query_id`.
-  - Renders it using D3.js inside a custom HTML component (`components.html`).
-  - Graph nodes correspond to returned papers; edges represent `CITES` relationships inferred from OpenAlex references.
 
 **Design implications**:
 - `app.py` remains thin and declarative; most logic is delegated to dedicated services.
@@ -235,10 +212,9 @@ The `Streamlit` app (`app.py`) is responsible for session management, user inter
   - Hits `https://api.openalex.org/works`.
   - Retrieves:
     - `id`, `title`, `authorships`, `abstract`, `publication_year`, `cited_by_count`, `referenced_works`.
-  - This is the primary source of citation graph structure via `referenced_works`.
 
 **Design implications**:
-- All API differences (schemas, optional fields) are normalized into a consistent internal representation the rest of the system can consume.
+- API differences (schemas, optional fields) are normalized into a consistent internal representation the rest of the system can consume.
 - Failures in one provider do not crash the pipeline; each search method is individually exception-safe.
 
 ---
@@ -343,52 +319,6 @@ In case of LLM failure, a meaningful error message is returned but the sources a
 
 ---
 
-### 6. Citation Graph Layer (`src/neo4j_client.py`)
-
-**Class**: `Neo4jClient`
-
-- **Purpose**: Persist a **query-centric citation subgraph** for interactive visualization and downstream analysis.
-- **Backend**: Neo4j (via official `neo4j` Python driver).
-
-#### Graph Schema
-
-- **Nodes**:
-  - `(:Query {id, text, updated_at})`
-  - `(:Paper {id, title, source, year, citation, cited_by})`
-- **Relationships**:
-  - `(:Query)-[:RETURNED]->(:Paper)`
-  - `(:Paper)-[:CITES]->(:Paper)`
-
-#### Ingestion (`upsert_query_graph`)
-
-1. Computes `query_id = md5(normalized_query)`.
-2. For each paper:
-   - Generates a stable internal ID via `_paper_id` (OpenAlex ID if present, else source+id, else citation, else md5(title)).
-   - Deduplicates papers within the current batch.
-3. Writes:
-   - `MERGE` on `Query` node with `id=query_id`.
-   - `MERGE` on `Paper` nodes with attributes including `cited_by` (citation count).
-   - Connects `Query` to `Paper` with `[:RETURNED]` edges.
-4. Constructs citation edges:
-   - Uses `openalex_id` and `references` fields from OpenAlex-based results.
-   - Adds `(:Paper)-[:CITES]->(:Paper)` edges between any pair of returned papers where one references the other.
-
-#### Query (`fetch_query_graph`)
-
-- Given a `query_id`, it:
-  - Retrieves all `Paper` nodes connected to that `Query`.
-  - Extracts citation edges among those papers.
-  - Returns a JSON-serializable graph:
-    - `nodes`: with `id`, `label`, `group`, `size` (based on `cited_by`), and `meta`.
-    - `links`: list of `{source, target}` edges.
-- This structure is directly consumed by the D3.js force-directed graph in `app.py`.
-
-**Design implications**:
-- The citation graph is compact and query-scoped, optimized for interactive visualization.
-- The schema is simple but extensible (e.g., additional properties or relationship types can be appended).
-
----
-
 ## Data Flow Summary
 
 1. **User question** (Q&A tab):
@@ -396,19 +326,12 @@ In case of LLM failure, a meaningful error message is returned but the sources a
    - `KnowledgeBase.search` (optional) + `AcademicSearchEngine.search_all`.
    - New papers ingested into ChromaDB.
    - LLM synthesizes answer from compiled context.
-   - Neo4j graph updated for the current query.
-   - UI displays answer, metrics, sources, and makes graph available.
+   - UI displays answer, metrics, and sources.
 
 2. **Direct search**:
    - UI → `AcademicSearchEngine.search_all`.
    - Results flattened and optional ingestion into KB.
-   - Neo4j graph written for the raw search query.
    - UI lists raw results and offers “Add All to Knowledge Base”.
-
-3. **Citation graph visualization**:
-   - UI requests `fetch_query_graph(last_graph_query_id)`.
-   - Neo4j returns nodes and edges.
-   - D3.js renders an interactive force-directed layout.
 
 ---
 
@@ -423,17 +346,10 @@ ANTHROPIC_API_KEY=...
 GOOGLE_API_KEY=...
 SEMANTIC_SCHOLAR_API_KEY=...
 CROSSREF_EMAIL=your-email@example.com
-
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=your-password
-NEO4J_DATABASE=neo4j
-
 DEFAULT_MODEL=groq   # or openai / anthropic / google
 ```
 
 - Only one LLM key is required to run, but multiple keys allow dynamic switching from the sidebar.
-- Neo4j configuration is optional; if omitted, graph features degrade gracefully in the UI.
 
 ---
 
@@ -445,19 +361,16 @@ DEFAULT_MODEL=groq   # or openai / anthropic / google
 pip install -r requirements.txt
 ```
 
-2. **Start Neo4j** (optional but recommended for full functionality).
-
-3. **Run the Streamlit app** from the project root:
+2. **Run the Streamlit app** from the project root:
 
 ```bash
 streamlit run app.py
 ```
 
-4. Open the provided local URL in your browser and:
+3. Open the provided local URL in your browser and:
    - Configure model provider and inspect KB stats in the sidebar.
    - Use the **Q&A Chat** tab for research questions.
    - Use **Direct Search** for raw multi-database exploration.
-   - Use **Citations Graph** to explore structural relationships.
 
 ---
 
@@ -471,12 +384,9 @@ This repository is designed for research-level experimentation. Some possible ex
 - **Evaluation**:
   - Intrinsic metrics: coverage of retrieved sources, redundancy reduction.
   - Extrinsic: expert evaluation of answer quality and citation fidelity.
-- **Graph analytics**:
-  - Graph-based influence scores (e.g., PageRank over `:CITES` subgraph).
-  - Community detection among returned papers.
 - **UI/UX improvements**:
   - Source-aware highlighting in answers.
   - Interactive filters for year, venue, field of study.
 
-The current architecture isolates concerns cleanly (retrieval, storage, RAG, graph), making it straightforward to swap out or extend individual layers without disruptive changes to the whole system.
+The current architecture isolates concerns cleanly (retrieval, storage, RAG), making it straightforward to swap out or extend individual layers without disruptive changes to the whole system.
 
